@@ -1,23 +1,23 @@
 {
-    "name": "ds-bot",
-    "module": "src/main.ts",
-    "type": "module",
+    "name": "music-bot",
+    "type": "commonjs",
     "scripts": {
-        "dev": "bun run --watch src/main.ts",
-        "start": "bun run src/main.ts"
+        "dev": "nodemon --exec \"ts-node src/main.ts\"",
+        "start": "node build/main.js",
+        "build": "tsc"
     },
     "devDependencies": {
-        "@types/bun": "latest"
-    },
-    "peerDependencies": {
-        "typescript": "^5.0.0"
+        "nodemon": "^3.1.7",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.6.2"
     },
     "dependencies": {
-        "@discordjs/opus": "^0.9.0",
         "@discordjs/voice": "^0.17.0",
         "discord.js": "^14.16.3",
+        "dotenv": "^16.4.5",
         "inversify": "^6.0.2",
-        "reflect-metadata": "^0.2.2",
-        "sodium": "^3.0.2",
+        "libsodium-wrappers": "^0.7.15",
+        "opusscript": "^0.0.8",
+        "reflect-metadata": "^0.2.2"
     }
 }

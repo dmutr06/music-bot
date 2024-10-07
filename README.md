@@ -1,15 +1,32 @@
-# ds-bot
+# music-bot
 
 To install dependencies:
 
 ```bash
-bun install
+npm install
 ```
 
-To run:
+Create .env and add DISCORD_TOKEN var:
 
 ```bash
-bun start 
+DISCORD_TOKEN = <YOUR_TOKEN>
 ```
 
-This project was created using `bun init` in bun v1.1.29. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
+To run in dev mode:
+
+```bash
+npm run dev
+```
+
+To build:
+
+```bash
+npm run build
+```
+
+To run in prod mode:
+
+```bash
+npm start
+```
+

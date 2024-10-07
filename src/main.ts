@@ -1,5 +1,8 @@
 import "reflect-metadata";
 
+import { config } from "dotenv";
+config();
+
 import type { App } from "./app";
 import { container } from "./inversify.config";
 import { TYPES } from "./types";
