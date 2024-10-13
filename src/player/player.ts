@@ -4,7 +4,7 @@ import { AudioPlayer, AudioPlayerStatus, createAudioPlayer, createAudioResource,
 import { TYPES, type Context } from "../types";
 import type { ILogger } from "../logger/logger.interface";
 import { spawn } from "child_process";
-import type { Channel, VoiceBasedChannel } from "discord.js";
+import type { VoiceBasedChannel } from "discord.js";
 
 
 @injectable()
@@ -40,42 +40,32 @@ export class Player implements IPlayer {
             args[0], 
         ]);
 
-        /* const ffmpegStream = spawn("ffmpeg", [
+        const ffmpegStream = spawn("ffmpeg", [
             "-i", "pipe:0",
-            args.length > 1 ? "-af" : "",
-            args.length > 1 ? args[1] : "",
+            args.length > 1 ? "-af" : null,
+            args.length > 1 ? args[1] : null,
             "-f", "opus",
             "pipe:1"
-        ]);
+        ].filter(el => el != null));
 
-        ytdlpStream.stdout.pipe(ffmpegStream.stdin); */
-
+        ytdlpStream.stdout.pipe(ffmpegStream.stdin);
 
         ytdlpStream.stderr.on('data', (data: Buffer) => {
-            // this.logger.error(String(data));
-            //ytdlpStream.stdout.unpipe();
-            //ytdlpStream.kill();
-            //ffmpegStream.kill();
+            this.logger.error(String(data));
         });
-
-        ytdlpStream.on("close", code => {
-        });
-
-        ytdlpStream.stdout.on("error", this.logger.error);
 
         const player = createAudioPlayer();
 
         this.players.set(voiceChannel.guildId, player);
 
-        const resource = createAudioResource(ytdlpStream.stdout);
-
+        const resource = createAudioResource(ffmpegStream.stdout);
         player.play(resource);
 
         player.on(AudioPlayerStatus.Idle, () => {
-            this.logger.debug("Killing processes");
+            ffmpegStream.stdin.destroy();
             ytdlpStream.stdout.destroy();
-            ytdlpStream.kill("SIGINT");
-            // ffmpegStream.kill("SIGTERM");
+            ytdlpStream.kill();
+            ffmpegStream.kill();
             conn.destroy();
             this.players.delete(voiceChannel.guildId);
         });
