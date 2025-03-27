@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "bun run --watch src/main.ts",
+    "build": "bun build src/main.ts --outdir ./out --target node",
+    "start": "bun run ./out/main.js",
     "lint": "eslint --fix"
   },
   "devDependencies": {
@@ -19,6 +21,7 @@
   "dependencies": {
     "@discordjs/voice": "^0.18.0",
     "discord.js": "^14.18.0",
+    "ffmpeg-static": "^5.2.0",
     "libsodium-wrappers": "^0.7.15"
   }
 }
