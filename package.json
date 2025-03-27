@@ -1,0 +1,24 @@
+{
+  "name": "anton",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun run --watch src/main.ts",
+    "lint": "eslint --fix"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.23.0",
+    "@types/bun": "latest",
+    "eslint": "^9.23.0",
+    "@stylistic/eslint-plugin": "^4.2.0",
+    "typescript-eslint": "^8.28.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@discordjs/voice": "^0.18.0",
+    "discord.js": "^14.18.0",
+    "libsodium-wrappers": "^0.7.15"
+  }
+}
