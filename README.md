@@ -12,6 +12,8 @@ To build:
 bun run build
 ```
 
+To run:
+
 ```bash
 bun start 
 ```
