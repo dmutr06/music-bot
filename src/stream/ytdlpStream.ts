@@ -22,6 +22,7 @@ export class YtdlpStream implements Stream {
     }
     
     public destroy(): void {
+        this.childProcess.stdout.unpipe();
         this.childProcess.kill();
     }
 }

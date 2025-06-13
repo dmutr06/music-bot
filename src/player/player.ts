@@ -1,19 +1,18 @@
 import { inject, injectable } from "inversify";
 import type { IPlayer } from "./player.interface";
-import { AudioPlayer, AudioPlayerStatus, createAudioPlayer, createAudioResource, joinVoiceChannel } from "@discordjs/voice";
+import { joinVoiceChannel } from "@discordjs/voice";
 import { TYPES, type Context } from "../types";
 import type { ILogger } from "../logger/logger.interface";
 import type { VoiceBasedChannel } from "discord.js";
-import { FfmpegStream } from "../stream/ffmpegStream";
-import { YtdlpStream } from "../stream/ytdlpStream";
+import { Queue } from "./queue";
 
 
 @injectable()
 export class Player implements IPlayer {
-    private players: Map<string, AudioPlayer>;
+    private queues: Map<string, Queue>;
 
     public constructor(@inject(TYPES.Logger) private logger: ILogger) {
-        this.players = new Map();
+        this.queues = new Map();
     }
 
     public async play(ctx: Context, args: string[]) {
@@ -21,59 +20,36 @@ export class Player implements IPlayer {
 
         if (!voiceChannel) return void ctx.reply("You must be in a voice");
 
-        if (this.players.get(voiceChannel.guildId)) {
-            return;
+        let queue = this.queues.get(voiceChannel.guildId);
+
+        if (!queue) {
+            const conn = joinVoiceChannel({
+                channelId: voiceChannel.id,
+                guildId: voiceChannel.guildId,
+                adapterCreator: voiceChannel.guild.voiceAdapterCreator as any,
+            }); 
+
+            queue = new Queue(this.logger, conn);
+
+            this.queues.set(voiceChannel.guildId, queue);
         }
 
-        const conn = joinVoiceChannel({
-            channelId: voiceChannel.id,
-            guildId: voiceChannel.guildId,
-            adapterCreator: voiceChannel.guild.voiceAdapterCreator as any,
-        });
-
-        const stream = new FfmpegStream(args.slice(1), new YtdlpStream(args[0]));
-
-        const player = createAudioPlayer();
-
-        this.players.set(voiceChannel.guildId, player);
-
-        const resource = createAudioResource(stream.stdout);
-        player.play(resource);
-
-        player.on(AudioPlayerStatus.Idle, () => {
-            try {
-                conn.destroy();
-                stream.destroy();
-            } catch (e) {
-                this.logger.error(e);
-            }
-            this.players.delete(voiceChannel.guildId);
-        });
-
-        conn.subscribe(player);
+        queue.enqueue(args[0], args.slice(1));
     }
 
     async stop(channel: VoiceBasedChannel): Promise<void> {
-        const player = this.players.get(channel.guildId);
-
-        if (!player) return;
-
-        player.stop();
+        this.queues.get(channel.guildId)?.clear();
     }
 
     async pause(channel: VoiceBasedChannel): Promise<void> {
-        const player = this.players.get(channel.guildId);
-
-        if (!player) return;
-
-        player.pause();
+        this.queues.get(channel.guildId)?.pause();
     }
 
     async resume(channel: VoiceBasedChannel): Promise<void> {
-        const player = this.players.get(channel.guildId);
+        this.queues.get(channel.guildId)?.resume();
+    }
 
-        if (!player) return;
-
-        player.unpause();
+    async skip(channel: VoiceBasedChannel): Promise<void> {
+        this.queues.get(channel.guildId)?.skip();
     }
 }

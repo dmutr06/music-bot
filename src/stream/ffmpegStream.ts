@@ -23,7 +23,8 @@ export class FfmpegStream implements Stream {
     }
     
     public destroy(): void {
-        this.childProcess.kill();
+        this.stdin.destroy();
         this.stream.destroy();
+        this.childProcess.kill();
     }
 }

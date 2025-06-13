@@ -7,4 +7,5 @@ export interface IPlayer {
     stop(channel: VoiceBasedChannel): Promise<void>;
     pause(channel: VoiceBasedChannel): Promise<void>;
     resume(channel: VoiceBasedChannel): Promise<void>;
+    skip(channel: VoiceBasedChannel): Promise<void>;
 }

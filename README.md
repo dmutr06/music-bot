@@ -4,7 +4,7 @@ A simple Discord music bot written in Node.js using Discord.js and @discordjs/vo
 
 To install dependencies:
 ```bash
-# apt install -y ffmpeg libopus-dev
+\# apt install -y ffmpeg libopus-dev
 ```
 
 Also you need to install yt-dlp, for example, via pip
@@ -36,4 +36,3 @@ To run in prod mode:
 ```bash
 $ npm start
 ```
-
