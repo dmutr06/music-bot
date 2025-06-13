@@ -1,7 +1,6 @@
 import { inject, injectable } from "inversify";
 import type { ICommandsHandler } from "./commandsHandler.interface";
 import { TYPES, type Context } from "../types";
-import type { ILogger } from "../logger/logger.interface";
 import type { IParser } from "../parser/parser.interface";
 
 import type { IPlayer } from "../player/player.interface";
@@ -10,7 +9,6 @@ import type { IPlayer } from "../player/player.interface";
 export class CommandsHandler implements ICommandsHandler {
     
     public constructor(
-        @inject(TYPES.Logger) private logger: ILogger,
         @inject(TYPES.CommandParser) private cmdParser: IParser,
         @inject(TYPES.Player) private player: IPlayer,
     ) {}
