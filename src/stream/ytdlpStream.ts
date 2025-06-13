@@ -13,12 +13,18 @@ export class YtdlpStream implements Stream {
             "-x",
             "-q",
             "--audio-format", "opus", 
+            "--buffer-size", "32K",
+            "--restrict-filenames",
             "-f", "bestaudio",
-            url,
+            url
         ]);
 
         this.stdin = this.childProcess.stdin;
         this.stdout = this.childProcess.stdout;
+
+        this.childProcess.stderr.on("data", err => {
+            console.log(String(err));
+        });
     }
     
     public destroy(): void {

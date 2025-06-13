@@ -2,7 +2,7 @@
     "name": "music-bot",
     "type": "commonjs",
     "scripts": {
-        "dev": "nodemon --exec \"ts-node src/main.ts\"",
+        "dev": "nodemon --watch 'src/**/*' --ext 'ts' --exec \"ts-node src/main.ts\"",
         "start": "node build/main.js",
         "build": "tsc"
     },

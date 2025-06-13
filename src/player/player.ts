@@ -6,7 +6,6 @@ import type { ILogger } from "../logger/logger.interface";
 import type { VoiceBasedChannel } from "discord.js";
 import { Queue } from "./queue";
 
-
 @injectable()
 export class Player implements IPlayer {
     private queues: Map<string, Queue>;
