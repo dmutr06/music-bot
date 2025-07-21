@@ -22,18 +22,12 @@ export class Player implements IPlayer {
         let queue = this.queues.get(voiceChannel.guildId);
 
         if (!queue) {
-            const conn = joinVoiceChannel({
-                channelId: voiceChannel.id,
-                guildId: voiceChannel.guildId,
-                adapterCreator: voiceChannel.guild.voiceAdapterCreator as any,
-            }); 
-
-            queue = new Queue(this.logger, conn);
+            queue = new Queue(this.logger);
 
             this.queues.set(voiceChannel.guildId, queue);
         }
-
-        queue.enqueue(args[0], args.slice(1));
+        queue.enqueue(voiceChannel, args[0], args.slice(1));
+        // queue.enqueue(args[0], args.slice(1));
     }
 
     async stop(channel: VoiceBasedChannel): Promise<void> {
