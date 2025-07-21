@@ -5,24 +5,24 @@ import { Stream } from "../stream/stream.interface";
 import { ILogger } from "../logger/logger.interface";
 import { VoiceBasedChannel } from "discord.js";
 
-type QueuedTrack = {
+type Track = {
     voiceChannel: VoiceBasedChannel;
-    url: string;
-    args: string[];
+    query: string;
+    ffmpegArgs: string;
     stream?: Stream;
     resource?: ReturnType<typeof createAudioResource>;
 };
 
 export class Queue {
     private audioPlayer: AudioPlayer;
-    private queue: QueuedTrack[] = [];
+    private queue: Track[] = [];
     private isPlaying: boolean = false;
 
     private curStream: Stream | null = null;
     private curVoiceChannel: VoiceBasedChannel | null = null;
     private curConn: VoiceConnection | null = null;
 
-    private lastTrack: QueuedTrack | null = null;
+    private lastTrack: Track | null = null;
 
     constructor(private logger: ILogger) {
         this.audioPlayer = createAudioPlayer(); 
@@ -40,13 +40,13 @@ export class Queue {
         });
     }
 
-    public enqueue(voiceChannel: VoiceBasedChannel, url: string, args: string[]) {
-        const track: QueuedTrack = { voiceChannel, url, args };
+    public enqueue(voiceChannel: VoiceBasedChannel, query: string, ffmpegArgs: string) {
+        const track: Track = { voiceChannel, query, ffmpegArgs };
         this.queue.push(track);
-        this.logger.info(`Added ${url} to queue in voice ${voiceChannel.name}`);
+        this.logger.info(`Added ${query} to queue in voice ${voiceChannel.name}`);
 
         try {
-            track.stream = new FfmpegStream(args, new YtdlpStream(url));
+            track.stream = new FfmpegStream(ffmpegArgs, new YtdlpStream(query));
             track.resource = createAudioResource(track.stream.stdout);
         } catch (e) {
             this.logger.error("Failed to preload track:", e);
@@ -57,14 +57,14 @@ export class Queue {
 
     private next() {
         if (this.queue.length == 0) {
-            if (this.lastTrack) {
-                this.enqueue(this.lastTrack?.voiceChannel, this.lastTrack?.url, this.lastTrack?.args);
-            }
+            this.curConn?.destroy();
+            this.curConn = null;
+            this.curVoiceChannel = null;
             return;
         };
 
         const track = this.queue.shift()!;
-        this.logger.info(`Playing ${track.url} (${track.args})`);
+        this.logger.info(`Playing ${track.query} (${track.ffmpegArgs})`);
         try {
             if (!this.curVoiceChannel || this.curVoiceChannel.id != track.voiceChannel.id) {
                 this.curConn?.destroy(); 
@@ -81,28 +81,26 @@ export class Queue {
 
             if (!track.stream || !track.resource) {
                 this.logger.warn("Track was not preloaded, loading now...");
-                track.stream = new FfmpegStream(track.args, new YtdlpStream(track.url));
+                track.stream = new FfmpegStream(track.ffmpegArgs, new YtdlpStream(track.query));
                 track.resource = createAudioResource(track.stream.stdout);
             }
 
             this.curStream = track.stream;
             this.lastTrack = track;
-            this.audioPlayer.play(track.resource);
             this.isPlaying = true;
+            this.audioPlayer.play(track.resource);
         } catch (e) {
-            this.logger.error("Failed to play:", track.url);
+            this.logger.error("Failed to play:", track.query);
             this.next();
         }
     }
 
     public skip() {
-        this.lastTrack = null;
         this.audioPlayer.stop();
     }
 
     public clear() {
         this.queue = [];
-        this.lastTrack = null;
         this.audioPlayer.stop();
     }
 

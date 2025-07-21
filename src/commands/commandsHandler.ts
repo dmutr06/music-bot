@@ -18,12 +18,12 @@ export class CommandsHandler implements ICommandsHandler {
 
         if (!res) return;
 
-        const { cmd, args } = res;
+        const { cmd, rest } = res;
 
         switch (cmd) {
             case "play":
-                if (args.length < 1) return void ctx.reply("Provide url");
-                return this.play(ctx, args);
+                if (!rest) return void ctx.reply("Provide url");
+                return this.play(ctx, rest);
             case "stop":
                 return this.stop(ctx);
             case "pause":
@@ -37,8 +37,9 @@ export class CommandsHandler implements ICommandsHandler {
         }
     }
 
-    async play(ctx: Context, args: string[]): Promise<void> {
-        this.player.play(ctx, args);
+    async play(ctx: Context, rest: string): Promise<void> {
+        const [query, ffmpegArgs] = rest.split("--", 2);
+        this.player.play(ctx, query.trimEnd(), ffmpegArgs?.trim());
     }
 
     async stop(ctx: Context): Promise<void> {

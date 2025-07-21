@@ -1,5 +1,5 @@
 
 
 export interface IParser {
-    parse(raw: string): { cmd: string, args: string[] } | null;
+    parse(raw: string): { cmd: string, rest: string; } | null;
 }

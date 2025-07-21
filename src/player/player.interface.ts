@@ -3,7 +3,7 @@ import type { Context } from "../types";
 
 
 export interface IPlayer {
-    play(ctx: Context, args: string[]): Promise<void>;
+    play(ctx: Context, query: string, ffmpegArgs: string): Promise<void>;
     stop(channel: VoiceBasedChannel): Promise<void>;
     pause(channel: VoiceBasedChannel): Promise<void>;
     resume(channel: VoiceBasedChannel): Promise<void>;

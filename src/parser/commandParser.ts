@@ -5,13 +5,25 @@ const PREFIX = "!";
 
 @injectable()
 export class CommandParser implements IParser {
-    parse(raw: string): { cmd: string; args: string[]; } | null {
-        if (!raw) return null;
-        const [cmd, ...args] = raw.split(" ");
+    parse(raw: string): { cmd: string; rest: string; } | null {
+        if (!raw || !raw.startsWith(PREFIX)) return null;
 
-        if (!cmd.startsWith(PREFIX)) return null;
+        raw = raw.slice(PREFIX.length);
+        const sep = raw.indexOf(" ");
 
-        return { cmd: cmd.slice(PREFIX.length), args };
+        let rest;
+        let cmd;
+
+        if (sep < 0) {
+            cmd = raw;
+            rest = "";
+        } else {
+            cmd = raw.slice(0, sep); 
+            rest = raw.slice(sep + 1);
+        }
+
+
+        return { cmd, rest };
     }
 }
 

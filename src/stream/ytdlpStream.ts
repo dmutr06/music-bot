@@ -16,6 +16,9 @@ export class YtdlpStream implements Stream {
             "--buffer-size", "32K",
             "--restrict-filenames",
             "-f", "bestaudio",
+            "--default-search", "ytsearch",
+            "--cookies", "cookies.txt",
+            // "--extractor-args", "youtube:player_client=web",
             url
         ]);
 

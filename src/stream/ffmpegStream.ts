@@ -7,11 +7,11 @@ export class FfmpegStream implements Stream {
     public stdout: Readable;
     public stdin: Writable;
 
-    constructor(args: string[], private stream: Stream) {
+    constructor(args: string | null, private stream: Stream) {
         this.childProcess = spawn("ffmpeg", [
             "-i", "pipe:0",
-            args.length > 0 ? "-af" : null,
-            args.length > 0 ? args[0] : null,
+            args ? "-af" : null,
+            args ? args : null,
             "-f", "opus",
             "pipe:1"
         ].filter(el => el != null));

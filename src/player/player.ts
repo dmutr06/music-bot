@@ -14,7 +14,7 @@ export class Player implements IPlayer {
         this.queues = new Map();
     }
 
-    public async play(ctx: Context, args: string[]) {
+    public async play(ctx: Context, query: string, ffmpegArgs: string) {
         const voiceChannel = ctx.member?.voice.channel;
 
         if (!voiceChannel) return void ctx.reply("You must be in a voice");
@@ -26,7 +26,8 @@ export class Player implements IPlayer {
 
             this.queues.set(voiceChannel.guildId, queue);
         }
-        queue.enqueue(voiceChannel, args[0], args.slice(1));
+
+        queue.enqueue(voiceChannel, query, ffmpegArgs);
         // queue.enqueue(args[0], args.slice(1));
     }
 
