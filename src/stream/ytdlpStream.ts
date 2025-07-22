@@ -18,6 +18,7 @@ export class YtdlpStream implements Stream {
             "-f", "bestaudio",
             "--default-search", "ytsearch",
             "--cookies", "cookies.txt",
+            "--no-sponsorblock",
             // "--extractor-args", "youtube:player_client=web",
             url
         ]);

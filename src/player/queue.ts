@@ -1,9 +1,25 @@
-import { AudioPlayer, AudioPlayerStatus, AudioResource, createAudioPlayer, createAudioResource, joinVoiceChannel, VoiceConnection } from "@discordjs/voice";
+import { spawn } from "child_process";
+import { AudioPlayer, AudioPlayerStatus, createAudioPlayer, createAudioResource, joinVoiceChannel, VoiceConnection } from "@discordjs/voice";
 import { FfmpegStream } from "../stream/ffmpegStream";
 import { YtdlpStream } from "../stream/ytdlpStream";
 import { Stream } from "../stream/stream.interface";
 import { ILogger } from "../logger/logger.interface";
 import { VoiceBasedChannel } from "discord.js";
+import { Context } from "../types";
+import { createReadStream, readFileSync, ReadStream } from "fs";
+import { Readable } from "stream";
+
+const helloBuffer = readFileSync("hello.mp3");
+
+
+export interface TrackInfo {
+    id: string;
+    title: string;
+    duration: number;
+    uploader: string;
+    webpage_url: string;
+    thumbnail?: string;
+};
 
 type Track = {
     voiceChannel: VoiceBasedChannel;
@@ -11,26 +27,27 @@ type Track = {
     ffmpegArgs: string;
     stream?: Stream;
     resource?: ReturnType<typeof createAudioResource>;
+    info?: TrackInfo;
 };
 
 export class Queue {
     private audioPlayer: AudioPlayer;
-    private queue: Track[] = [];
+    public queue: Track[] = [];
     private isPlaying: boolean = false;
 
     private curStream: Stream | null = null;
     private curVoiceChannel: VoiceBasedChannel | null = null;
     private curConn: VoiceConnection | null = null;
 
-    private lastTrack: Track | null = null;
-
-    constructor(private logger: ILogger) {
+    constructor(private logger: ILogger, private ctx: Context) {
         this.audioPlayer = createAudioPlayer(); 
 
         this.audioPlayer.on(AudioPlayerStatus.Idle, () => {
+            if (!this.isPlaying) return;
             this.curStream?.destroy();
             this.curStream = null;
             this.isPlaying = false;
+            this.queue.shift();
             this.next();
         });
 
@@ -38,14 +55,59 @@ export class Queue {
             this.logger.error("Audio Player Error:", err);
             this.next();
         });
+
+        this.audioPlayer.on("stateChange", (oldState, newState) => {
+
+            if (
+                oldState.status != AudioPlayerStatus.Playing
+                && newState.status == AudioPlayerStatus.Playing
+                && this.isPlaying
+            ) {
+                const info = this.queue[0].info!;
+                this.ctx.channel.send({
+                    files: [info.thumbnail || ""],
+                    content: `Playing\n«${info.title}» by ${info.uploader}`,
+                });
+            }
+        });
     }
 
-    public enqueue(voiceChannel: VoiceBasedChannel, query: string, ffmpegArgs: string) {
+    private async joinVoiceChannel(voiceChannel: VoiceBasedChannel): Promise<void> {
+        return new Promise((resolve) => {
+            if (!this.curVoiceChannel || this.curVoiceChannel.id != voiceChannel.id) {
+                this.curConn?.destroy(); 
+
+                this.curVoiceChannel = voiceChannel;
+                this.curConn = joinVoiceChannel({
+                    channelId: voiceChannel.id,
+                    guildId: voiceChannel.guildId,
+                    adapterCreator: voiceChannel.guild.voiceAdapterCreator as any,
+                }); 
+
+                const resource = createAudioResource(Readable.from(helloBuffer));
+
+                this.audioPlayer.play(resource);
+
+                this.audioPlayer.on(AudioPlayerStatus.Idle, () => {
+                    if (resource.ended) resolve();
+                });
+
+                this.curConn.subscribe(this.audioPlayer);
+            } else {
+                resolve();
+            }
+        });
+    }
+
+    public async enqueue(voiceChannel: VoiceBasedChannel, query: string, ffmpegArgs: string) {
         const track: Track = { voiceChannel, query, ffmpegArgs };
         this.queue.push(track);
         this.logger.info(`Added ${query} to queue in voice ${voiceChannel.name}`);
 
+
         try {
+            const info = await this.fetchTrackInfo(query);
+            track.info = info;
             track.stream = new FfmpegStream(ffmpegArgs, new YtdlpStream(query));
             track.resource = createAudioResource(track.stream.stdout);
         } catch (e) {
@@ -55,7 +117,7 @@ export class Queue {
         if (!this.isPlaying) this.next();
     }
 
-    private next() {
+    private async next() {
         if (this.queue.length == 0) {
             this.curConn?.destroy();
             this.curConn = null;
@@ -63,21 +125,11 @@ export class Queue {
             return;
         };
 
-        const track = this.queue.shift()!;
+        const track = this.queue[0];
         this.logger.info(`Playing ${track.query} (${track.ffmpegArgs})`);
         try {
-            if (!this.curVoiceChannel || this.curVoiceChannel.id != track.voiceChannel.id) {
-                this.curConn?.destroy(); 
 
-                this.curVoiceChannel = track.voiceChannel;
-                this.curConn = joinVoiceChannel({
-                    channelId: track.voiceChannel.id,
-                    guildId: track.voiceChannel.guildId,
-                    adapterCreator: track.voiceChannel.guild.voiceAdapterCreator as any,
-                }); 
-
-                this.curConn.subscribe(this.audioPlayer);
-            }
+            await this.joinVoiceChannel(track.voiceChannel);
 
             if (!track.stream || !track.resource) {
                 this.logger.warn("Track was not preloaded, loading now...");
@@ -86,7 +138,6 @@ export class Queue {
             }
 
             this.curStream = track.stream;
-            this.lastTrack = track;
             this.isPlaying = true;
             this.audioPlayer.play(track.resource);
         } catch (e) {
@@ -110,5 +161,39 @@ export class Queue {
 
     public resume() {
         this.audioPlayer.unpause();
+    }
+
+    private async fetchTrackInfo(url: string): Promise<TrackInfo> {
+        return new Promise((resolve, reject) => {
+            const ytdlp = spawn("yt-dlp", ["--dump-single-json", "--lazy-playlist", "-f", "bestaudio", url]);
+
+            let json = "";
+
+            ytdlp.stdout.on("data", (chunk) => {
+                json += String(chunk);
+            });
+
+            ytdlp.on("close", code => {
+                if (code != 0) return reject(new Error("yt-dlp could not fetch info"));
+
+                try {
+                    const data = JSON.parse(json);
+
+                    const info: TrackInfo = {
+                        id: data.id,
+                        title: data.title,
+                        duration: data.duration,
+                        uploader: data.uploader,
+                        webpage_url: data.webpage_url,
+                        thumbnail: data.thumbnail,
+                    }
+
+                    resolve(info);
+                } catch (e) {
+                    reject(e);
+                }
+            });
+
+            })
     }
 }

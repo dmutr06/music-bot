@@ -32,6 +32,8 @@ export class CommandsHandler implements ICommandsHandler {
                 return this.resume(ctx);
             case "skip":
                 return this.skip(ctx);
+            case "queue":
+                return this.queue(ctx);
             default:
                 return;
         }
@@ -65,4 +67,9 @@ export class CommandsHandler implements ICommandsHandler {
         if (!voiceChannel) return;
         this.player.skip(voiceChannel);
     }
+
+    async queue(ctx: Context): Promise<void> {
+        this.player.getQueue(ctx);
+    }
+
 }

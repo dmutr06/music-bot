@@ -8,4 +8,5 @@ export interface IPlayer {
     pause(channel: VoiceBasedChannel): Promise<void>;
     resume(channel: VoiceBasedChannel): Promise<void>;
     skip(channel: VoiceBasedChannel): Promise<void>;
+    getQueue(ctx: Context): Promise<void>;
 }
