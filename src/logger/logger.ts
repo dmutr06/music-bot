@@ -1,8 +1,6 @@
-import { injectable } from "inversify";
 import type { ILogger } from "./logger.interface";
 
 
-@injectable()
 export class Logger implements ILogger {
     public debug(...args: any[]): void {
         console.log("[DEBUG] ", ...args); 

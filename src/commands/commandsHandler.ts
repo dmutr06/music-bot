@@ -1,16 +1,14 @@
-import { inject, injectable } from "inversify";
 import type { ICommandsHandler } from "./commandsHandler.interface";
-import { TYPES, type Context } from "../types";
+import { type Context } from "../types";
 import type { IParser } from "../parser/parser.interface";
 
 import type { IPlayer } from "../player/player.interface";
 
-@injectable()
 export class CommandsHandler implements ICommandsHandler {
     
     public constructor(
-        @inject(TYPES.CommandParser) private cmdParser: IParser,
-        @inject(TYPES.Player) private player: IPlayer,
+        private cmdParser: IParser,
+        private player: IPlayer,
     ) {}
 
     async handleCommand(ctx: Context): Promise<void> {

@@ -1,16 +1,13 @@
-import { inject, injectable } from "inversify";
 import type { IPlayer } from "./player.interface";
-import { joinVoiceChannel } from "@discordjs/voice";
-import { TYPES, type Context } from "../types";
+import { type Context } from "../types";
 import type { ILogger } from "../logger/logger.interface";
 import type { VoiceBasedChannel } from "discord.js";
 import { Queue } from "./queue";
 
-@injectable()
 export class Player implements IPlayer {
     private queues: Map<string, Queue>;
 
-    public constructor(@inject(TYPES.Logger) private logger: ILogger) {
+    public constructor(private logger: ILogger) {
         this.queues = new Map();
     }
 

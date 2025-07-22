@@ -19,7 +19,7 @@ export class FfmpegStream implements Stream {
         this.stdin = this.childProcess.stdin;
         this.stdout = this.childProcess.stdout;
 
-        stream.stdout.pipe(this.stdin);
+        stream.stdout?.pipe(this.stdin);
     }
     
     public destroy(): void {

@@ -8,7 +8,7 @@ export class YtdlpStream implements Stream {
     public stdin: Writable;
 
     constructor(url: string) {
-        this.childProcess = spawn("yt-dlp", [
+        const args = [
             "-o", '-', 
             "-x",
             "-q",
@@ -16,12 +16,12 @@ export class YtdlpStream implements Stream {
             "--buffer-size", "32K",
             "--restrict-filenames",
             "-f", "bestaudio",
-            "--default-search", "ytsearch",
             "--cookies", "cookies.txt",
             "--no-sponsorblock",
-            // "--extractor-args", "youtube:player_client=web",
-            url
-        ]);
+        ];
+
+        args.push(url);
+        this.childProcess = spawn("yt-dlp", args);
 
         this.stdin = this.childProcess.stdin;
         this.stdout = this.childProcess.stdout;
@@ -29,10 +29,11 @@ export class YtdlpStream implements Stream {
         this.childProcess.stderr.on("data", err => {
             console.log(String(err));
         });
+
+        this.childProcess.on("exit", (code) => {
+            console.log(code);
+        });
     }
     
-    public destroy(): void {
-        this.childProcess.stdout.unpipe();
-        this.childProcess.kill();
-    }
+    public destroy(): void {}
 }

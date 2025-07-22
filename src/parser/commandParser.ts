@@ -1,9 +1,7 @@
-import { injectable } from "inversify";
 import type { IParser } from "./parser.interface";
 
 const PREFIX = "!";
 
-@injectable()
 export class CommandParser implements IParser {
     parse(raw: string): { cmd: string; rest: string; } | null {
         if (!raw || !raw.startsWith(PREFIX)) return null;

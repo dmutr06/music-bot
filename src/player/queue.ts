@@ -1,3 +1,5 @@
+import fs, { createReadStream } from "fs";
+import { access } from "fs/promises";
 import { spawn } from "child_process";
 import { AudioPlayer, AudioPlayerStatus, createAudioPlayer, createAudioResource, joinVoiceChannel, VoiceConnection } from "@discordjs/voice";
 import { FfmpegStream } from "../stream/ffmpegStream";
@@ -6,8 +8,9 @@ import { Stream } from "../stream/stream.interface";
 import { ILogger } from "../logger/logger.interface";
 import { VoiceBasedChannel } from "discord.js";
 import { Context } from "../types";
-import { createReadStream, readFileSync, ReadStream } from "fs";
+import { readFileSync } from "fs";
 import { Readable } from "stream";
+import { CachedStream } from "../stream/cachedStream";
 
 const helloBuffer = readFileSync("hello.mp3");
 
@@ -55,21 +58,6 @@ export class Queue {
             this.logger.error("Audio Player Error:", err);
             this.next();
         });
-
-        this.audioPlayer.on("stateChange", (oldState, newState) => {
-
-            if (
-                oldState.status != AudioPlayerStatus.Playing
-                && newState.status == AudioPlayerStatus.Playing
-                && this.isPlaying
-            ) {
-                const info = this.queue[0].info!;
-                this.ctx.channel.send({
-                    files: [info.thumbnail || ""],
-                    content: `Playing\n«${info.title}» by ${info.uploader}`,
-                });
-            }
-        });
     }
 
     private async joinVoiceChannel(voiceChannel: VoiceBasedChannel): Promise<void> {
@@ -101,20 +89,43 @@ export class Queue {
 
     public async enqueue(voiceChannel: VoiceBasedChannel, query: string, ffmpegArgs: string) {
         const track: Track = { voiceChannel, query, ffmpegArgs };
-        this.queue.push(track);
         this.logger.info(`Added ${query} to queue in voice ${voiceChannel.name}`);
 
+        let cachingPromise = new Promise<void>((res) => res());
 
         try {
             const info = await this.fetchTrackInfo(query);
             track.info = info;
-            track.stream = new FfmpegStream(ffmpegArgs, new YtdlpStream(query));
-            track.resource = createAudioResource(track.stream.stdout);
+
+            try {
+                await access(`.cache/${info.id}`);
+                track.resource = createAudioResource(createReadStream(`.cache/${info.id}`));
+                track.stream = new CachedStream(`.cache/${info.id}`);
+            } catch (e) {
+                track.stream = new YtdlpStream(info.webpage_url);
+                if (info.duration < 7200) {
+                    cachingPromise = new Promise<void>((res, rej) => {
+                        const writeStream = fs.createWriteStream(`.cache/${info.id}`);
+                        writeStream.on("unpipe", () => writeStream.close());
+                        track.stream?.stdout?.pipe(writeStream);
+                        
+                        writeStream.on("finish", res);
+                        writeStream.on("error", rej);
+                    });
+                }
+            }
+
+            track.stream = new FfmpegStream(ffmpegArgs, track.stream);
+            track.resource = createAudioResource(track.stream.stdout!);
+            this.queue.push(track);
         } catch (e) {
+            this.ctx.reply("Could not find a track");
             this.logger.error("Failed to preload track:", e);
         }
 
         if (!this.isPlaying) this.next();
+
+        await cachingPromise;
     }
 
     private async next() {
@@ -132,15 +143,21 @@ export class Queue {
             await this.joinVoiceChannel(track.voiceChannel);
 
             if (!track.stream || !track.resource) {
-                this.logger.warn("Track was not preloaded, loading now...");
-                track.stream = new FfmpegStream(track.ffmpegArgs, new YtdlpStream(track.query));
-                track.resource = createAudioResource(track.stream.stdout);
+                this.queue.shift();
+                return;
             }
 
             this.curStream = track.stream;
             this.isPlaying = true;
             this.audioPlayer.play(track.resource);
+
+            const info = this.queue[0].info!;
+            this.ctx.channel.send({
+                files: [info.thumbnail || ""],
+                content: `Playing\n«${info.title}» by ${info.uploader}`,
+            });
         } catch (e) {
+            this.isPlaying = false;
             this.logger.error("Failed to play:", track.query);
             this.next();
         }
@@ -165,7 +182,17 @@ export class Queue {
 
     private async fetchTrackInfo(url: string): Promise<TrackInfo> {
         return new Promise((resolve, reject) => {
-            const ytdlp = spawn("yt-dlp", ["--dump-single-json", "--lazy-playlist", "-f", "bestaudio", url]);
+            const ytdlp = spawn(
+                "yt-dlp",
+                [
+                    "--skip-download", 
+                    "--print", 
+                    '{"id": "%(id)s", "title": "%(title)s", "duration": %(duration)s, "uploader": "%(uploader)s", "webpage_url": "%(webpage_url)s", "thumbnail": "%(thumbnail)s"}',
+                    "-f", "bestaudio",
+                    "--default-search", "ytsearch",
+                    url,
+                ],
+            );
 
             let json = "";
 
@@ -193,7 +220,6 @@ export class Queue {
                     reject(e);
                 }
             });
-
-            })
+        });
     }
 }
