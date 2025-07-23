@@ -9,9 +9,16 @@ export class FfmpegStream implements Stream {
 
     constructor(args: string | null, private stream: Stream) {
         this.childProcess = spawn("ffmpeg", [
+            "-analyzeduration", "0",
+            "-probesize", "32k",
             "-i", "pipe:0",
             args ? "-af" : null,
             args ? args : null,
+            "-fflags", "+nobuffer",
+            "-vn",
+            "-threads", "1",
+            "-c:a", "libopus",
+            "-b:a", "96k",
             "-f", "opus",
             "pipe:1"
         ].filter(el => el != null));

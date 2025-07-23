@@ -10,7 +10,7 @@ export class YoutubeService {
             "--audio-format", "opus", 
             "--buffer-size", "32K",
             "--restrict-filenames",
-            "-f", "bestaudio",
+            "-f", "bestaudio[abr<=96]",
             "--cookies", "cookies.txt",
             "--no-sponsorblock",
         ];

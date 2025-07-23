@@ -95,9 +95,9 @@ export class Queue {
             } catch (e) {
                 track.stream = new YtdlpStream(info.webpage_url);
                 if (info.duration < 7200) {
-                    const writeStream = fs.createWriteStream(`.cache/${info.id}`);
-                    writeStream.on("unpipe", () => writeStream.close());
-                    track.stream?.stdout?.pipe(writeStream);
+                    // const writeStream = fs.createWriteStream(`.cache/${info.id}`);
+                    // writeStream.on("unpipe", () => writeStream.close());
+                    // track.stream?.stdout?.pipe(writeStream);
                 }
             }
 
