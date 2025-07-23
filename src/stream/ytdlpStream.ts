@@ -1,6 +1,7 @@
 import { Stream } from "./stream.interface";
 import { Writable, Readable,  } from "stream";
-import { ChildProcessWithoutNullStreams, spawn } from "child_process";
+import { ChildProcessWithoutNullStreams } from "child_process";
+import { YoutubeService } from "../services/youtube";
 
 export class YtdlpStream implements Stream {
     private childProcess: ChildProcessWithoutNullStreams;
@@ -8,20 +9,7 @@ export class YtdlpStream implements Stream {
     public stdin: Writable;
 
     constructor(url: string) {
-        const args = [
-            "-o", '-', 
-            "-x",
-            "-q",
-            "--audio-format", "opus", 
-            "--buffer-size", "32K",
-            "--restrict-filenames",
-            "-f", "bestaudio",
-            "--cookies", "cookies.txt",
-            "--no-sponsorblock",
-        ];
-
-        args.push(url);
-        this.childProcess = spawn("yt-dlp", args);
+        this.childProcess = YoutubeService.spawnYtdlp(url);
 
         this.stdin = this.childProcess.stdin;
         this.stdout = this.childProcess.stdout;

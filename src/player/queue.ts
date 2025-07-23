@@ -1,48 +1,29 @@
 import fs, { createReadStream } from "fs";
 import { access } from "fs/promises";
-import { spawn } from "child_process";
 import { AudioPlayer, AudioPlayerStatus, createAudioPlayer, createAudioResource, joinVoiceChannel, VoiceConnection } from "@discordjs/voice";
 import { FfmpegStream } from "../stream/ffmpegStream";
 import { YtdlpStream } from "../stream/ytdlpStream";
 import { Stream } from "../stream/stream.interface";
 import { ILogger } from "../logger/logger.interface";
-import { VoiceBasedChannel } from "discord.js";
-import { Context } from "../types";
+import { SendableChannels, VoiceBasedChannel } from "discord.js";
+import { TrackContext } from "../types";
 import { readFileSync } from "fs";
 import { Readable } from "stream";
 import { CachedStream } from "../stream/cachedStream";
+import { YoutubeService } from "../services/youtube";
 
 const helloBuffer = readFileSync("hello.mp3");
 
-
-export interface TrackInfo {
-    id: string;
-    title: string;
-    duration: number;
-    uploader: string;
-    webpage_url: string;
-    thumbnail?: string;
-};
-
-type Track = {
-    voiceChannel: VoiceBasedChannel;
-    query: string;
-    ffmpegArgs: string;
-    stream?: Stream;
-    resource?: ReturnType<typeof createAudioResource>;
-    info?: TrackInfo;
-};
-
 export class Queue {
     private audioPlayer: AudioPlayer;
-    public queue: Track[] = [];
+    public queue: TrackContext[] = [];
     private isPlaying: boolean = false;
 
     private curStream: Stream | null = null;
     private curVoiceChannel: VoiceBasedChannel | null = null;
     private curConn: VoiceConnection | null = null;
 
-    constructor(private logger: ILogger, private ctx: Context) {
+    constructor(private logger: ILogger) {
         this.audioPlayer = createAudioPlayer(); 
 
         this.audioPlayer.on(AudioPlayerStatus.Idle, () => {
@@ -87,15 +68,25 @@ export class Queue {
         });
     }
 
-    public async enqueue(voiceChannel: VoiceBasedChannel, query: string, ffmpegArgs: string) {
-        const track: Track = { voiceChannel, query, ffmpegArgs };
-        this.logger.info(`Added ${query} to queue in voice ${voiceChannel.name}`);
+    public async enqueue(textChannel: SendableChannels, voiceChannel: VoiceBasedChannel, query: string, ffmpegArgs: string) {
+        const track: TrackContext = { textChannel, voiceChannel, query, ffmpegArgs };
 
-        let cachingPromise = new Promise<void>((res) => res());
+        this.logger.info(`Added ${query} to queue in voice ${voiceChannel.name}`);
+        const fetchingMessage = await textChannel.send({
+            embeds: [{
+                title: "Fetching...",
+            }],
+        });
 
         try {
-            const info = await this.fetchTrackInfo(query);
+            const info = await YoutubeService.fetchTrackInfo(query);
             track.info = info;
+
+            await fetchingMessage.edit({
+                embeds: [{
+                    title: `${info.title} added to queue`,
+                }],
+            });
 
             try {
                 await access(`.cache/${info.id}`);
@@ -104,14 +95,9 @@ export class Queue {
             } catch (e) {
                 track.stream = new YtdlpStream(info.webpage_url);
                 if (info.duration < 7200) {
-                    cachingPromise = new Promise<void>((res, rej) => {
-                        const writeStream = fs.createWriteStream(`.cache/${info.id}`);
-                        writeStream.on("unpipe", () => writeStream.close());
-                        track.stream?.stdout?.pipe(writeStream);
-                        
-                        writeStream.on("finish", res);
-                        writeStream.on("error", rej);
-                    });
+                    const writeStream = fs.createWriteStream(`.cache/${info.id}`);
+                    writeStream.on("unpipe", () => writeStream.close());
+                    track.stream?.stdout?.pipe(writeStream);
                 }
             }
 
@@ -119,13 +105,15 @@ export class Queue {
             track.resource = createAudioResource(track.stream.stdout!);
             this.queue.push(track);
         } catch (e) {
-            this.ctx.reply("Could not find a track");
+            await fetchingMessage.edit({
+                embeds: [{
+                    title: "Could not find a track",
+                }],
+            });
             this.logger.error("Failed to preload track:", e);
         }
 
         if (!this.isPlaying) this.next();
-
-        await cachingPromise;
     }
 
     private async next() {
@@ -152,9 +140,12 @@ export class Queue {
             this.audioPlayer.play(track.resource);
 
             const info = this.queue[0].info!;
-            this.ctx.channel.send({
-                files: [info.thumbnail || ""],
-                content: `Playing\n«${info.title}» by ${info.uploader}`,
+            await track.textChannel.send({
+                embeds: [{
+                    title: `Playing ${info.title}`,
+                    description: `by ${info.uploader}`,
+                    thumbnail: info.thumbnail ? { url: info.thumbnail } : undefined,
+                }]
             });
         } catch (e) {
             this.isPlaying = false;
@@ -178,48 +169,5 @@ export class Queue {
 
     public resume() {
         this.audioPlayer.unpause();
-    }
-
-    private async fetchTrackInfo(url: string): Promise<TrackInfo> {
-        return new Promise((resolve, reject) => {
-            const ytdlp = spawn(
-                "yt-dlp",
-                [
-                    "--skip-download", 
-                    "--print", 
-                    '{"id": "%(id)s", "title": "%(title)s", "duration": %(duration)s, "uploader": "%(uploader)s", "webpage_url": "%(webpage_url)s", "thumbnail": "%(thumbnail)s"}',
-                    "-f", "bestaudio",
-                    "--default-search", "ytsearch",
-                    url,
-                ],
-            );
-
-            let json = "";
-
-            ytdlp.stdout.on("data", (chunk) => {
-                json += String(chunk);
-            });
-
-            ytdlp.on("close", code => {
-                if (code != 0) return reject(new Error("yt-dlp could not fetch info"));
-
-                try {
-                    const data = JSON.parse(json);
-
-                    const info: TrackInfo = {
-                        id: data.id,
-                        title: data.title,
-                        duration: data.duration,
-                        uploader: data.uploader,
-                        webpage_url: data.webpage_url,
-                        thumbnail: data.thumbnail,
-                    }
-
-                    resolve(info);
-                } catch (e) {
-                    reject(e);
-                }
-            });
-        });
     }
 }
