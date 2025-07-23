@@ -3,7 +3,6 @@ import { access } from "fs/promises";
 import { AudioPlayer, AudioPlayerStatus, createAudioPlayer, createAudioResource, joinVoiceChannel, VoiceConnection } from "@discordjs/voice";
 import { FfmpegStream } from "../stream/ffmpegStream";
 import { YtdlpStream } from "../stream/ytdlpStream";
-import { Stream } from "../stream/stream.interface";
 import { ILogger } from "../logger/logger.interface";
 import { SendableChannels, VoiceBasedChannel } from "discord.js";
 import { TrackContext } from "../types";
@@ -19,7 +18,6 @@ export class Queue {
     public queue: TrackContext[] = [];
     private isPlaying: boolean = false;
 
-    private curStream: Stream | null = null;
     private curVoiceChannel: VoiceBasedChannel | null = null;
     private curConn: VoiceConnection | null = null;
 
@@ -28,10 +26,10 @@ export class Queue {
 
         this.audioPlayer.on(AudioPlayerStatus.Idle, () => {
             if (!this.isPlaying) return;
-            this.curStream?.destroy();
-            this.curStream = null;
             this.isPlaying = false;
-            this.queue.shift();
+            const track = this.queue.shift();
+
+            track?.stream?.destroy();
             this.next();
         });
 
@@ -85,6 +83,7 @@ export class Queue {
             await fetchingMessage.edit({
                 embeds: [{
                     title: `${info.title} added to queue`,
+                    color: 0x10FFa0,
                 }],
             });
 
@@ -95,9 +94,9 @@ export class Queue {
             } catch (e) {
                 track.stream = new YtdlpStream(info.webpage_url);
                 if (info.duration < 7200) {
-                    // const writeStream = fs.createWriteStream(`.cache/${info.id}`);
-                    // writeStream.on("unpipe", () => writeStream.close());
-                    // track.stream?.stdout?.pipe(writeStream);
+                    const writeStream = fs.createWriteStream(`.cache/${info.id}`);
+                    writeStream.on("unpipe", () => writeStream.close());
+                    track.stream?.stdout?.pipe(writeStream);
                 }
             }
 
@@ -108,6 +107,7 @@ export class Queue {
             await fetchingMessage.edit({
                 embeds: [{
                     title: "Could not find a track",
+                    color: 0xFF1010,
                 }],
             });
             this.logger.error("Failed to preload track:", e);
@@ -135,7 +135,6 @@ export class Queue {
                 return;
             }
 
-            this.curStream = track.stream;
             this.isPlaying = true;
             this.audioPlayer.play(track.resource);
 
@@ -144,7 +143,8 @@ export class Queue {
                 embeds: [{
                     title: `Playing ${info.title}`,
                     description: `by ${info.uploader}`,
-                    thumbnail: info.thumbnail ? { url: info.thumbnail } : undefined,
+                    image: info.thumbnail ? { url: info.thumbnail } : undefined,
+                    color: 0x10a0FF,
                 }]
             });
         } catch (e) {
