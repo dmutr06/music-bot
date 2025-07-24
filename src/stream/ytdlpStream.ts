@@ -14,9 +14,9 @@ export class YtdlpStream implements Stream {
         this.stdin = this.childProcess.stdin;
         this.stdout = this.childProcess.stdout;
 
-        this.childProcess.stderr.on("data", err => {
-            console.log(String(err));
-        });
+        // this.childProcess.stdout.on("data", (ch) => {
+        //     console.log(String(ch));
+        // })
     }
     
     public destroy(): void {

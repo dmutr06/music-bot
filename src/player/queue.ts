@@ -5,7 +5,7 @@ import { FfmpegStream } from "../stream/ffmpegStream";
 import { YtdlpStream } from "../stream/ytdlpStream";
 import { ILogger } from "../logger/logger.interface";
 import { SendableChannels, VoiceBasedChannel } from "discord.js";
-import { TrackContext, TrackInfo } from "../types";
+import { TrackContext } from "../types";
 import { readFileSync } from "fs";
 import { Readable } from "stream";
 import { CachedStream } from "../stream/cachedStream";
@@ -126,24 +126,34 @@ export class Queue {
         }
 
         if (!this.isPlaying) return this.next();
+        if (this.queue.length > 1) this.prepareTrack(this.queue[1]);
     }
 
     private async prepareTrack(track: TrackContext) {
         if (track.stream) return;
 
         const info = track.info!;
-        console.log(track.info.webpage_url);
         try {
             await access(`.cache/${info.id}`);
             track.stream = new CachedStream(`.cache/${info.id}`);
         } catch {
-            console.log(info);
             track.stream = new YtdlpStream(info.webpage_url, !info.duration);
             if (info.duration && info.duration < 7200) {
                 const writeStream = fs.createWriteStream(`.cache/${info.id}`);
                 track.stream?.stdout?.pipe(writeStream);
             }
         }
+
+        try {
+            track.stream = new FfmpegStream(track.ffmpegArgs, track.stream!);
+            track.resource = createAudioResource(track.stream.stdout!);
+        } catch (e) {
+            this.logger.error("Error creating ffmpeg stream:", e);
+            track.stream?.destroy();
+            track.stream = undefined;
+            track.resource = undefined;
+        }
+	
     }
 
     private async next() {
@@ -165,15 +175,10 @@ export class Queue {
 
             if (!track.stream) throw new Error("Failed to load a track");
 
-            track.stream = new FfmpegStream(track.ffmpegArgs, track.stream!);
-            const resource = createAudioResource(track.stream.stdout!, {
-                inputType: StreamType.OggOpus,
-            });
             this.isPlaying = true;
-            this.audioPlayer.play(resource);
+            this.audioPlayer.play(track.resource!);
 
             const info = this.queue[0].info!;
-            console.log(info);
             await track.textChannel.send({
                 embeds: [{
                     title: `Playing ${info.title}`,
@@ -206,5 +211,21 @@ export class Queue {
 
     public resume() {
         this.audioPlayer.unpause();
+    }
+
+    public ff(time: number) {
+        if (!this.isPlaying) return;
+        // this.isPlaying = false;
+        //
+        // const track = this.queue[0];
+        //
+        // if (!track || !track.stream) return;
+        //
+        // track.stream.stdout?.unpipe();
+        // track.stream = new FfmpegStream(`atrim=start=${time}`, track.stream!);
+        // track.resource?.playStream()
+        // track.resource = createAudioResource(track.stream?.stdout!);
+        // this.isPlaying = true;
+        // this.audioPlayer.play(track.resource);
     }
 }

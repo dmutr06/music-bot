@@ -32,6 +32,8 @@ export class CommandsHandler implements ICommandsHandler {
                 return this.skip(ctx);
             case "queue":
                 return this.queue(ctx);
+            case "ff":
+                return this.ff(ctx, rest);
             default:
                 return;
         }
@@ -70,4 +72,7 @@ export class CommandsHandler implements ICommandsHandler {
         this.player.getQueue(ctx);
     }
 
+    async ff(ctx: Context, time: string): Promise<void> {
+        this.player.ff(ctx, Number(time));
+    }
 }

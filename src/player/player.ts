@@ -69,4 +69,14 @@ export class Player implements IPlayer {
 
         ctx.reply(msg);
     }
+
+    async ff(ctx: Context, time: number): Promise<void> {
+        const guildId = ctx.guildId;
+        if (!guildId) return;
+
+        const queue = this.queues.get(guildId);
+        if (!queue) return;
+
+        queue.ff(time);
+    }
 }

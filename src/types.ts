@@ -1,4 +1,5 @@
 import type { Message, OmitPartialGroupDMChannel, SendableChannels, VoiceBasedChannel } from "discord.js"
+import { createAudioResource } from "@discordjs/voice";
 import { Stream } from "./stream/stream.interface";
 
 export type Context = OmitPartialGroupDMChannel<Message<boolean>>;
@@ -18,6 +19,7 @@ export type TrackContext = {
     query: string;
     ffmpegArgs: string;
     stream?: Stream;
+    resource?: ReturnType<typeof createAudioResource>;
     info: TrackInfo;
 };
 

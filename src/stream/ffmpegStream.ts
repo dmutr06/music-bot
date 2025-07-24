@@ -25,12 +25,18 @@ export class FfmpegStream implements Stream {
         this.stdin = this.childProcess.stdin;
         this.stdout = this.childProcess.stdout;
 
+        this.childProcess.stderr.on("data", (chunk) => {
+            const msg = String(chunk);
+            if (msg.includes("Conversion failed!")) {
+                this.destroy();
+            }
+        });
+
         this.stream.stdout?.pipe(this.stdin);
     }
     
     public destroy(): void {
-        console.log(this.childProcess.pid);
-        console.log("destroy...");
+        this.stdout.unpipe();
         this.stdin.destroy();
         this.childProcess.kill();
         this.stream.destroy();
