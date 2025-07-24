@@ -8,7 +8,7 @@ export class YtdlpStream implements Stream {
     public stdout: Readable;
     public stdin: Writable;
 
-    constructor(url: string) {
+    constructor(url: string, private isStream: boolean) {
         this.childProcess = YoutubeService.spawnYtdlp(url);
 
         this.stdin = this.childProcess.stdin;
@@ -17,11 +17,11 @@ export class YtdlpStream implements Stream {
         this.childProcess.stderr.on("data", err => {
             console.log(String(err));
         });
-
-        this.childProcess.on("exit", (code) => {
-            console.log(code);
-        });
     }
     
-    public destroy(): void {}
+    public destroy(): void {
+        if (this.isStream) {
+            this.childProcess.kill("SIGINT");
+        }
+    }
 }

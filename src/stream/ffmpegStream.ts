@@ -17,7 +17,6 @@ export class FfmpegStream implements Stream {
             "-fflags", "+nobuffer",
             "-vn",
             "-threads", "1",
-            "-c:a", "libopus",
             "-b:a", "96k",
             "-f", "opus",
             "pipe:1"
@@ -26,12 +25,14 @@ export class FfmpegStream implements Stream {
         this.stdin = this.childProcess.stdin;
         this.stdout = this.childProcess.stdout;
 
-        stream.stdout?.pipe(this.stdin);
+        this.stream.stdout?.pipe(this.stdin);
     }
     
     public destroy(): void {
+        console.log(this.childProcess.pid);
+        console.log("destroy...");
         this.stdin.destroy();
-        this.stream.destroy();
         this.childProcess.kill();
+        this.stream.destroy();
     }
 }

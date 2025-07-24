@@ -1,11 +1,11 @@
-import fs, { createReadStream } from "fs";
+import fs from "fs";
 import { access } from "fs/promises";
-import { AudioPlayer, AudioPlayerStatus, createAudioPlayer, createAudioResource, joinVoiceChannel, VoiceConnection } from "@discordjs/voice";
+import { AudioPlayer, AudioPlayerStatus, createAudioPlayer, createAudioResource, joinVoiceChannel, StreamType, VoiceConnection } from "@discordjs/voice";
 import { FfmpegStream } from "../stream/ffmpegStream";
 import { YtdlpStream } from "../stream/ytdlpStream";
 import { ILogger } from "../logger/logger.interface";
 import { SendableChannels, VoiceBasedChannel } from "discord.js";
-import { TrackContext } from "../types";
+import { TrackContext, TrackInfo } from "../types";
 import { readFileSync } from "fs";
 import { Readable } from "stream";
 import { CachedStream } from "../stream/cachedStream";
@@ -27,9 +27,10 @@ export class Queue {
         this.audioPlayer.on(AudioPlayerStatus.Idle, () => {
             if (!this.isPlaying) return;
             this.isPlaying = false;
-            const track = this.queue.shift();
-
-            track?.stream?.destroy();
+            if (this.queue.length != 0) {
+                const track = this.queue.shift();
+                track?.stream?.destroy();
+            }
             this.next();
         });
 
@@ -67,9 +68,7 @@ export class Queue {
     }
 
     public async enqueue(textChannel: SendableChannels, voiceChannel: VoiceBasedChannel, query: string, ffmpegArgs: string) {
-        const track: TrackContext = { textChannel, voiceChannel, query, ffmpegArgs };
-
-        this.logger.info(`Added ${query} to queue in voice ${voiceChannel.name}`);
+        this.logger.info(`Fetching ${query} for ${voiceChannel.name}`);
         const fetchingMessage = await textChannel.send({
             embeds: [{
                 title: "Fetching...",
@@ -77,32 +76,45 @@ export class Queue {
         });
 
         try {
-            const info = await YoutubeService.fetchTrackInfo(query);
-            track.info = info;
+            const info = await YoutubeService.fetchInfo(query);
 
-            await fetchingMessage.edit({
-                embeds: [{
-                    title: `${info.title} added to queue`,
-                    color: 0x10FFa0,
-                }],
-            });
+            switch (info.type) {
+                case "video": {
+                    this.queue.push({
+                        voiceChannel,
+                        textChannel,
+                        query,
+                        ffmpegArgs,
+                        info: info.trackInfo,
+                    });
 
-            try {
-                await access(`.cache/${info.id}`);
-                track.resource = createAudioResource(createReadStream(`.cache/${info.id}`));
-                track.stream = new CachedStream(`.cache/${info.id}`);
-            } catch (e) {
-                track.stream = new YtdlpStream(info.webpage_url);
-                if (info.duration < 7200) {
-                    const writeStream = fs.createWriteStream(`.cache/${info.id}`);
-                    writeStream.on("unpipe", () => writeStream.close());
-                    track.stream?.stdout?.pipe(writeStream);
-                }
+                    await fetchingMessage.edit({
+                        embeds: [{
+                            title: `${info.trackInfo.title} added to queue`,
+                            color: 0x10FFa0,
+                        }],
+                    });
+
+                    break;
+                };
+                case "playlist": {
+                    for (const track of info.playlistInfo.entries) {
+                        this.queue.push({
+                            voiceChannel,
+                            textChannel,
+                            query,
+                            ffmpegArgs,
+                            info: track,
+                        });
+                    }
+                    await fetchingMessage.edit({
+                        embeds: [{
+                            title: `${info.playlistInfo.title} added to queue`,
+                            color: 0x10FFa0,
+                        }],
+                    });
+                };
             }
-
-            track.stream = new FfmpegStream(ffmpegArgs, track.stream);
-            track.resource = createAudioResource(track.stream.stdout!);
-            this.queue.push(track);
         } catch (e) {
             await fetchingMessage.edit({
                 embeds: [{
@@ -113,7 +125,25 @@ export class Queue {
             this.logger.error("Failed to preload track:", e);
         }
 
-        if (!this.isPlaying) this.next();
+        if (!this.isPlaying) return this.next();
+    }
+
+    private async prepareTrack(track: TrackContext) {
+        if (track.stream) return;
+
+        const info = track.info!;
+        console.log(track.info.webpage_url);
+        try {
+            await access(`.cache/${info.id}`);
+            track.stream = new CachedStream(`.cache/${info.id}`);
+        } catch {
+            console.log(info);
+            track.stream = new YtdlpStream(info.webpage_url, !info.duration);
+            if (info.duration && info.duration < 7200) {
+                const writeStream = fs.createWriteStream(`.cache/${info.id}`);
+                track.stream?.stdout?.pipe(writeStream);
+            }
+        }
     }
 
     private async next() {
@@ -127,18 +157,23 @@ export class Queue {
         const track = this.queue[0];
         this.logger.info(`Playing ${track.query} (${track.ffmpegArgs})`);
         try {
-
             await this.joinVoiceChannel(track.voiceChannel);
 
-            if (!track.stream || !track.resource) {
-                this.queue.shift();
-                return;
+            if (!track.stream) {
+                await this.prepareTrack(track);
             }
 
+            if (!track.stream) throw new Error("Failed to load a track");
+
+            track.stream = new FfmpegStream(track.ffmpegArgs, track.stream!);
+            const resource = createAudioResource(track.stream.stdout!, {
+                inputType: StreamType.OggOpus,
+            });
             this.isPlaying = true;
-            this.audioPlayer.play(track.resource);
+            this.audioPlayer.play(resource);
 
             const info = this.queue[0].info!;
+            console.log(info);
             await track.textChannel.send({
                 embeds: [{
                     title: `Playing ${info.title}`,
@@ -147,9 +182,11 @@ export class Queue {
                     color: 0x10a0FF,
                 }]
             });
+
+            if (this.queue.length > 1) this.prepareTrack(this.queue[1]);
         } catch (e) {
             this.isPlaying = false;
-            this.logger.error("Failed to play:", track.query);
+            this.logger.error("Failed to play:", track.info.title, e);
             this.next();
         }
     }
@@ -159,7 +196,7 @@ export class Queue {
     }
 
     public clear() {
-        this.queue = [];
+        this.queue = this.queue.slice(0, 1);
         this.audioPlayer.stop();
     }
 

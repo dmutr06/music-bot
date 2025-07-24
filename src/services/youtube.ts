@@ -1,5 +1,7 @@
 import { spawn } from "child_process";
-import { TrackInfo } from "../types";
+import { PlaylistInfo, TrackInfo } from "../types";
+
+type Info = { type: "video", trackInfo: TrackInfo } | { type: "playlist", playlistInfo: PlaylistInfo };
 
 export class YoutubeService {
     static spawnYtdlp(url: string) {
@@ -7,12 +9,11 @@ export class YoutubeService {
             "-o", '-', 
             "-x",
             "-q",
-            "--audio-format", "opus", 
             "--buffer-size", "32K",
-            "--restrict-filenames",
-            "-f", "bestaudio[abr<=96]",
+            "-f", "bestaudio",
             "--cookies", "cookies.txt",
             "--no-sponsorblock",
+            "--hls-use-mpegts",
         ];
 
         args.push(url);
@@ -24,16 +25,28 @@ export class YoutubeService {
         return childProcess;
     }
 
-    static fetchTrackInfo(query: string): Promise<TrackInfo> {
-        return new Promise((resolve, reject) => {
+    static fetchInfo(query: string): Promise<Info> {
+        return new Promise<Info>((resolve, reject) => {
+            const args = [
+                    "--skip-download", 
+            ];
+
+            try {
+                const url = new URL(query);
+
+                if (url.searchParams.has("list")) {
+                    args.push("-J", "--flat-playlist");
+                } else {
+                    args.push("-j");
+                }
+            } catch (e) {
+                args.push("-j", "--default-search", "ytsearch");
+            }
+
+            args.push(query);
             const ytdlp = spawn(
                 "yt-dlp",
-                [
-                    "--skip-download", 
-                    "-j", 
-                    "--default-search", "ytsearch",
-                    query,
-                ],
+                args,
             );
 
             let json = "";
@@ -48,16 +61,29 @@ export class YoutubeService {
                 try {
                     const data = JSON.parse(json);
 
-                    const info: TrackInfo = {
-                        id: data.id,
-                        title: data.title,
-                        duration: data.duration,
-                        uploader: data.uploader,
-                        webpage_url: data.webpage_url,
-                        thumbnail: data.thumbnail,
-                    }
+                    console.log(data._type);
+                    switch (data._type) {
+                        case "video": {
+                            resolve({ type: "video", trackInfo: data });
+                            break;
+                        }
 
-                    resolve(info);
+                        case "playlist": {
+                            resolve({ type: "playlist", playlistInfo: {
+                                title: data.title,
+                                entries: data.entries.map((entry: any) => ({
+                                    id: entry.id,
+                                    title: entry.title,
+                                    webpage_url: entry.url,
+                                    uploader: entry.uploader,
+                                    thumbnail: entry.thumbnails.at(-1)?.url,
+                                }))
+                            } });
+                            break;
+                        }
+
+                        default: throw new Error("Unknown media type");
+                    }
                 } catch (e) {
                     reject(e);
                 }

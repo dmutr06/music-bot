@@ -58,7 +58,7 @@ export class Player implements IPlayer {
 
         let msg = "";
 
-        for (let i = 0; i < tracks.length; ++i) {
+        for (let i = 0; i < Math.min(tracks.length, 10); ++i) {
             const info = tracks[i].info;
             if (info) {
                 msg += `${i + 1}. «${info.title}» by ${info.uploader}\n`;
